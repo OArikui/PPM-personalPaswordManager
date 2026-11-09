@@ -1,1 +1,2 @@
 cryptography>=44,<48
+PyQt6>=6.7,<7
