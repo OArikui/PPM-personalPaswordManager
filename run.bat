@@ -29,12 +29,9 @@ if errorlevel 1 (
     )
 )
 
-set "RUN_PY=%VENV_PY%"
-for %%A in (%*) do (
-    if /i "%%~A"=="--background" set "RUN_PY=%~dp0.venv\Scripts\pythonw.exe"
-)
+set "VENV_PYW=%~dp0.venv\Scripts\pythonw.exe"
+if not exist "%VENV_PYW%" set "VENV_PYW=%VENV_PY%"
 
-"%RUN_PY%" "%~dp0password_manager.py" %*
-set "EXIT_CODE=%ERRORLEVEL%"
-if not "%EXIT_CODE%"=="0" pause
-exit /b %EXIT_CODE%
+rem Run the GUI and its tray-resident service without keeping a console window.
+start "" "%VENV_PYW%" "%~dp0password_manager.py" %*
+exit /b 0
