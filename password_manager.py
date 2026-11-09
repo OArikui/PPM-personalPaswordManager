@@ -45,6 +45,8 @@ from password_manager_core import (
     APP_VERSION,
     AUTO_LOCK_SECONDS,
     BASE_FIELDS,
+    app_data_dir,
+    derive_key,
     CLIPBOARD_CLEAR_SECONDS,
     SUPPORTED_FORMATS,
     Vault,
