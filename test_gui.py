@@ -7,6 +7,7 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 from password_manager import PasswordManagerWindow
@@ -58,6 +59,22 @@ class SystemTrayTests(unittest.TestCase):
     def test_tray_show_action_restores_the_window(self):
         self.window.hide()
         self.assertTrue(self.window.show_window())
+        self.assertTrue(self.window.isVisible())
+
+
+    def test_closing_main_window_does_not_quit_application(self):
+        self.assertFalse(self.app.quitOnLastWindowClosed())
+
+    def test_main_window_supports_right_click_menu(self):
+        self.assertEqual(
+            self.window.centralWidget().contextMenuPolicy(),
+            Qt.ContextMenuPolicy.CustomContextMenu,
+        )
+
+    def test_close_is_blocked_if_no_tray_is_available(self):
+        self.window.tray_available = False
+        self.window.show()
+        self.window.close()
         self.assertTrue(self.window.isVisible())
 
     def test_auto_lock_timer_uses_configured_timeout(self):
