@@ -473,7 +473,9 @@ class EntryEditorDialog(QDialog):
             value_combo.setCompleter(configure)
             value_combo.setCurrentText(current)
 
-        name_combo.currentTextChanged.connect(refresh_values)
+        name_combo.lineEdit().editingFinished.connect(
+            lambda: refresh_values(name_combo.currentText())
+        )
         remove_button.clicked.connect(lambda: self.remove_custom_row(row))
 
     def remove_custom_row(self, row: dict[str, Any]) -> None:
@@ -716,6 +718,7 @@ class PasswordManagerWindow(QMainWindow):
 
         if selected_item:
             self.tree.setCurrentItem(selected_item)
+            self.on_tree_select()
         else:
             self.selected_id = None
             self._show_details(None)
