@@ -699,6 +699,10 @@ class PasswordManagerWindow(QMainWindow):
         )
         self.tree.setAlternatingRowColors(True)
         self.tree.setSelectionMode(QTreeWidget.SelectionMode.SingleSelection)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(
+            lambda position: self.tray_menu.exec(self.tree.mapToGlobal(position))
+        )
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in range(1, 4):
             self.tree.header().setSectionResizeMode(
