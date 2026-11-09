@@ -12,6 +12,7 @@ from typing import Any
 
 from PyQt6.QtCore import QEvent, Qt, QTimer
 from PyQt6.QtGui import QIcon
+
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -26,6 +27,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -36,6 +38,7 @@ from PyQt6.QtWidgets import (
     QToolBar,
     QTreeWidget,
     QTreeWidgetItem,
+    QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
@@ -537,9 +540,17 @@ class EntryEditorDialog(QDialog):
 
 
 class PasswordManagerWindow(QMainWindow):
-    def __init__(self, vault: Vault):
+    def __init__(self, vault: Vault, *, background_start: bool = False):
         super().__init__()
         self.vault = vault
+        self.background_start = background_start
+        self.allow_exit = False
+        self.tray_available = QSystemTrayIcon.isSystemTrayAvailable()
+        # This process owns both the visible UI and the resident tray service.
+        # Never let Qt quit merely because the last window was closed.
+        QApplication.instance().setQuitOnLastWindowClosed(False)
+        self.tray_icon: QSystemTrayIcon | None = None
+        self.tray_menu = QMenu(self)
         self.selected_id: str | None = None
         self.revealed_details = False
         self.editor: EntryEditorDialog | None = None
@@ -553,18 +564,93 @@ class PasswordManagerWindow(QMainWindow):
 
         self.auto_lock_timer = QTimer(self)
         self.auto_lock_timer.setSingleShot(True)
-        self.auto_lock_timer.timeout.connect(self.lock_vault)
+        self.auto_lock_timer.timeout.connect(
+            lambda: self.lock_vault(show_unlock=False)
+        )
         self.clipboard_timer = QTimer(self)
         self.clipboard_timer.setSingleShot(True)
         self.clipboard_timer.timeout.connect(self.clear_clipboard_if_unchanged)
 
         self._build_ui()
+        self._setup_tray_icon()
         QApplication.instance().installEventFilter(self)
         self.refresh_tree()
         self.reset_auto_lock_timer()
 
+    def _setup_tray_icon(self) -> None:
+        """通知領域アイコンと右クリックメニューを用意する。"""
+        self.tray_menu.addAction("UIを表示", self.show_window)
+        self.tray_menu.addAction("アカウントを追加", self.quick_add_entry)
+        self.tray_menu.addAction("検索", self.quick_search)
+        self.tray_menu.addSeparator()
+        self.tray_menu.addAction(
+            "保管庫をロック", lambda: self.lock_vault(show_unlock=False)
+        )
+        self.tray_menu.addSeparator()
+        self.tray_menu.addAction("終了", self.quit_application)
+
+        if not self.tray_available:
+            return
+
+        icon = QIcon(str(resource_path("favicon.ico")))
+        if icon.isNull():
+            icon = QIcon(str(resource_path("favicon.png")))
+        self.tray_icon = QSystemTrayIcon(icon, self)
+        self.tray_icon.setToolTip(f"{APP_NAME} v{APP_VERSION}")
+        self.tray_icon.setContextMenu(self.tray_menu)
+        self.tray_icon.activated.connect(self.on_tray_activated)
+        self.tray_icon.show()
+
+    def on_tray_activated(
+        self, reason: QSystemTrayIcon.ActivationReason
+    ) -> None:
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self.show_window()
+
+    def show_window(self) -> bool:
+        """トレイから画面を開く。ロック中なら先に認証する。"""
+        if not self.vault.fernet:
+            access = VaultAccessDialog(self.vault, self)
+            if access.exec() != QDialog.DialogCode.Accepted:
+                return False
+            self.refresh_tree()
+            if self.tray_icon:
+                self.tray_icon.setToolTip(f"{APP_NAME} v{APP_VERSION}")
+            self.reset_auto_lock_timer()
+
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        self.reset_auto_lock_timer()
+        return True
+
+    def quick_add_entry(self) -> None:
+        if self.show_window():
+            QTimer.singleShot(0, self.new_entry)
+
+    def quick_search(self) -> None:
+        if self.show_window():
+            self.search.setFocus()
+            self.search.selectAll()
+
+    def quit_application(self) -> None:
+        """右クリックメニューからのみアプリ全体を終了する。"""
+        self.allow_exit = True
+        self.close()
+        if self.allow_exit:
+            QApplication.quit()
+
+    def show_window_context_menu(self, position) -> None:
+        """メイン画面の右クリックでも常駐メニューを開く。"""
+        self.tray_menu.exec(self.centralWidget().mapToGlobal(position))
+
     def _build_ui(self) -> None:
         central = QWidget()
+        central.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        central.customContextMenuRequested.connect(self.show_window_context_menu)
         self.setCentralWidget(central)
         outer = QVBoxLayout(central)
 
@@ -613,6 +699,10 @@ class PasswordManagerWindow(QMainWindow):
         )
         self.tree.setAlternatingRowColors(True)
         self.tree.setSelectionMode(QTreeWidget.SelectionMode.SingleSelection)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(
+            lambda position: self.tray_menu.exec(self.tree.mapToGlobal(position))
+        )
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in range(1, 4):
             self.tree.header().setSectionResizeMode(
@@ -1043,7 +1133,7 @@ class PasswordManagerWindow(QMainWindow):
         )
         self.refresh_tree()
 
-    def lock_vault(self) -> None:
+    def lock_vault(self, *, show_unlock: bool = True) -> None:
         if not self.vault.fernet:
             return
         if self.vault.dirty:
@@ -1061,15 +1151,66 @@ class PasswordManagerWindow(QMainWindow):
         self.detail_text.clear()
         if self.editor and self.editor.isVisible():
             self.editor.reject()
+
+        if self.tray_icon:
+            self.tray_icon.setToolTip(f"{APP_NAME} - ロック中")
+
+        # トレイ常駐時の自動ロック／クイックロックでは、
+        # ロック解除ダイアログを出さずに隠す。次にアイコンを押すと認証する。
+        if not show_unlock and self.tray_available:
+            self.hide()
+            if self.tray_icon:
+                self.tray_icon.showMessage(
+                    APP_NAME,
+                    "保管庫をロックしました。アイコンをクリックして再度ロック解除してください。",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    4000,
+                )
+            return
+
         QMessageBox.information(self, APP_NAME, "保管庫をロックしました。")
         access = VaultAccessDialog(self.vault, self)
         if access.exec() != QDialog.DialogCode.Accepted:
-            self.close()
+            if self.tray_available:
+                self.hide()
+            else:
+                self.close()
             return
         self.refresh_tree()
+        if self.tray_icon:
+            self.tray_icon.setToolTip(f"{APP_NAME} v{APP_VERSION}")
         self.reset_auto_lock_timer()
 
     def closeEvent(self, event) -> None:
+        if not self.tray_available and not self.allow_exit:
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                "通知領域が利用できないため、ウィンドウを閉じることはできません。\\n"
+                "メイン画面を右クリックして「終了」を選択してください。",
+            )
+            event.ignore()
+            return
+
+        if self.tray_available and not self.allow_exit:
+            if self.vault.fernet and self.vault.dirty:
+                try:
+                    self.vault.save()
+                except (VaultError, OSError) as exc:
+                    answer = QMessageBox.question(
+                        self,
+                        APP_NAME,
+                        f"保存に失敗しました。保存せずに隠しますか？\n\n{exc}",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No,
+                    )
+                    if answer != QMessageBox.StandardButton.Yes:
+                        event.ignore()
+                        return
+            self.hide()
+            event.ignore()
+            return
+
         if self.vault.fernet and self.vault.dirty:
             try:
                 self.vault.save()
@@ -1082,11 +1223,14 @@ class PasswordManagerWindow(QMainWindow):
                     QMessageBox.StandardButton.No,
                 )
                 if answer != QMessageBox.StandardButton.Yes:
+                    self.allow_exit = False
                     event.ignore()
                     return
         self.auto_lock_timer.stop()
         self.clipboard_timer.stop()
         self.clear_clipboard_if_unchanged()
+        if self.tray_icon:
+            self.tray_icon.hide()
         QApplication.instance().removeEventFilter(self)
         super().closeEvent(event)
 
@@ -1094,11 +1238,18 @@ class PasswordManagerWindow(QMainWindow):
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=APP_NAME)
     parser.add_argument("--vault", help="使用する保管庫ファイル (*.pwm)")
+    parser.add_argument(
+        "--background",
+        action="store_true",
+        help="認証後はメイン画面を表示せず、通知領域に常駐する",
+    )
     args = parser.parse_args(argv)
 
     app = QApplication([sys.argv[0]])
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
+    # Normal startup always creates the resident tray service alongside the UI.
+    app.setQuitOnLastWindowClosed(False)
 
     vault_path = Path(args.vault).expanduser() if args.vault else load_saved_vault_path()
     vault = Vault(vault_path)
@@ -1106,8 +1257,17 @@ def main(argv: list[str] | None = None) -> int:
     if access.exec() != QDialog.DialogCode.Accepted:
         return 0
 
-    window = PasswordManagerWindow(vault)
-    window.show()
+    window = PasswordManagerWindow(vault, background_start=args.background)
+    if window.background_start and window.tray_available:
+        window.statusBar().showMessage(
+            "バックグラウンドで起動しました。通知領域のアイコンから操作できます。"
+        )
+    else:
+        window.show()
+        if window.background_start and not window.tray_available:
+            window.statusBar().showMessage(
+                "システムトレイが利用できないため、通常のウィンドウで起動しました。"
+            )
     return app.exec()
 
 

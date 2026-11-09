@@ -29,7 +29,9 @@ if errorlevel 1 (
     )
 )
 
-"%VENV_PY%" "%~dp0password_manager.py" %*
-set "EXIT_CODE=%ERRORLEVEL%"
-if not "%EXIT_CODE%"=="0" pause
-exit /b %EXIT_CODE%
+set "VENV_PYW=%~dp0.venv\Scripts\pythonw.exe"
+if not exist "%VENV_PYW%" set "VENV_PYW=%VENV_PY%"
+
+rem Run the GUI and its tray-resident service without keeping a console window.
+start "" "%VENV_PYW%" "%~dp0password_manager.py" %*
+exit /b 0
