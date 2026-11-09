@@ -70,6 +70,12 @@ run.bat を実行してください。初回は .venv を作成し、必要な�
 
     .\run.bat
 
+バックグラウンドで起動する場合（マスターパスワード認証後はメイン画面を表示せず、通知領域に常駐）:
+
+    .\run.bat --background
+
+バックグラウンド起動では Windows のコンソール画面を表示しない pythonw.exe を使用します。通知領域アイコンを右クリックして「終了」を選ぶまで常駐します。
+
 特定の保管庫を指定する場合:
 
     .\run.bat --vault "E:\PasswordManager\my_vault.pwm"
