@@ -30,8 +30,9 @@ if errorlevel 1 (
 )
 
 set "RUN_PY=%VENV_PY%"
-echo %* | findstr /i /c:"--background" >nul
-if not errorlevel 1 set "RUN_PY=%~dp0.venv\Scripts\pythonw.exe"
+for %%A in (%*) do (
+    if /i "%%~A"=="--background" set "RUN_PY=%~dp0.venv\Scripts\pythonw.exe"
+)
 
 "%RUN_PY%" "%~dp0password_manager.py" %*
 set "EXIT_CODE=%ERRORLEVEL%"
