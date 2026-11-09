@@ -72,6 +72,12 @@ class SystemTrayTests(unittest.TestCase):
             Qt.ContextMenuPolicy.CustomContextMenu,
         )
 
+    def test_account_list_supports_quick_action_context_menu(self):
+        self.assertEqual(
+            self.window.tree.contextMenuPolicy(),
+            Qt.ContextMenuPolicy.CustomContextMenu,
+        )
+
     def test_close_is_blocked_if_no_tray_is_available(self):
         self.window.tray_available = False
         self.window.show()
