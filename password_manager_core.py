@@ -23,7 +23,7 @@ except ImportError as exc:
     ) from exc
 
 APP_NAME = "Personal Password Manager"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 VAULT_FORMAT = 2
 SUPPORTED_FORMATS = {1, 2}
 KDF_N = 2**16
