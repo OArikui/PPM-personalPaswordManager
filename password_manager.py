@@ -1178,6 +1178,16 @@ class PasswordManagerWindow(QMainWindow):
         self.reset_auto_lock_timer()
 
     def closeEvent(self, event) -> None:
+        if not self.tray_available and not self.allow_exit:
+            QMessageBox.warning(
+                self,
+                APP_NAME,
+                "通知領域が利用できないため、ウィンドウを閉じることはできません。\\n"
+                "メイン画面を右クリックして「終了」を選択してください。",
+            )
+            event.ignore()
+            return
+
         if self.tray_available and not self.allow_exit:
             if self.vault.fernet and self.vault.dirty:
                 try:
