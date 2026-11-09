@@ -1176,7 +1176,7 @@ class PasswordManagerWindow(QMainWindow):
                     answer = QMessageBox.question(
                         self,
                         APP_NAME,
-                        f"保存に失敗しました。保存せずに隠しますか？\\n\\n{exc}",
+                        f"保存に失敗しました。保存せずに隠しますか？\n\n{exc}",
                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                         QMessageBox.StandardButton.No,
                     )
