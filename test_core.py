@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 import unittest
 
-import password_manager as pm
+import password_manager_core as pm
 
 
 class PasswordManagerCoreTests(unittest.TestCase):
