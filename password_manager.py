@@ -614,6 +614,8 @@ class PasswordManagerWindow(QMainWindow):
             if access.exec() != QDialog.DialogCode.Accepted:
                 return False
             self.refresh_tree()
+            if self.tray_icon:
+                self.tray_icon.setToolTip(f"{APP_NAME} v{APP_VERSION}")
             self.reset_auto_lock_timer()
 
         self.showNormal()
