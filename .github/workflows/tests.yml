@@ -38,6 +38,7 @@ jobs:
               vault = Vault(Path(directory) / "smoke.pwm")
               vault.create("ci smoke test password")
               window = PasswordManagerWindow(vault)
+              window.allow_exit = True
               window.close()
           PY
       - name: Run unit tests
