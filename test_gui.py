@@ -4,11 +4,12 @@ import os
 import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from password_manager import PasswordManagerWindow
 from password_manager_core import AUTO_LOCK_SECONDS, Vault
@@ -74,7 +75,8 @@ class SystemTrayTests(unittest.TestCase):
     def test_close_is_blocked_if_no_tray_is_available(self):
         self.window.tray_available = False
         self.window.show()
-        self.window.close()
+        with patch.object(QMessageBox, "warning"):
+            self.window.close()
         self.assertTrue(self.window.isVisible())
 
     def test_auto_lock_timer_uses_configured_timeout(self):
