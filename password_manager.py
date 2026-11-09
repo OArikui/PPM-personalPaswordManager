@@ -1232,13 +1232,13 @@ def main(argv: list[str] | None = None) -> int:
     window = PasswordManagerWindow(vault, background_start=args.background)
     app.setQuitOnLastWindowClosed(not window.tray_available)
 
-    if args.background and window.tray_available:
+    if window.background_start and window.tray_available:
         window.statusBar().showMessage(
             "バックグラウンドで起動しました。通知領域のアイコンから操作できます。"
         )
     else:
         window.show()
-        if args.background and not window.tray_available:
+        if window.background_start and not window.tray_available:
             window.statusBar().showMessage(
                 "システムトレイが利用できないため、通常のウィンドウで起動しました。"
             )
