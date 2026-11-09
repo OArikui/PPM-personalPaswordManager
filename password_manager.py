@@ -546,6 +546,9 @@ class PasswordManagerWindow(QMainWindow):
         self.background_start = background_start
         self.allow_exit = False
         self.tray_available = QSystemTrayIcon.isSystemTrayAvailable()
+        # This process owns both the visible UI and the resident tray service.
+        # Never let Qt quit merely because the last window was closed.
+        QApplication.instance().setQuitOnLastWindowClosed(False)
         self.tray_icon: QSystemTrayIcon | None = None
         self.tray_menu = QMenu(self)
         self.selected_id: str | None = None
@@ -634,13 +637,20 @@ class PasswordManagerWindow(QMainWindow):
             self.search.selectAll()
 
     def quit_application(self) -> None:
+        """右クリックメニューからのみアプリ全体を終了する。"""
         self.allow_exit = True
         self.close()
         if self.allow_exit:
             QApplication.quit()
 
+    def show_window_context_menu(self, position) -> None:
+        """メイン画面の右クリックでも常駐メニューを開く。"""
+        self.tray_menu.exec(self.centralWidget().mapToGlobal(position))
+
     def _build_ui(self) -> None:
         central = QWidget()
+        central.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        central.customContextMenuRequested.connect(self.show_window_context_menu)
         self.setCentralWidget(central)
         outer = QVBoxLayout(central)
 
@@ -1205,6 +1215,8 @@ class PasswordManagerWindow(QMainWindow):
         self.auto_lock_timer.stop()
         self.clipboard_timer.stop()
         self.clear_clipboard_if_unchanged()
+        if self.tray_icon:
+            self.tray_icon.hide()
         QApplication.instance().removeEventFilter(self)
         super().closeEvent(event)
 
@@ -1222,6 +1234,8 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication([sys.argv[0]])
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
+    # Normal startup always creates the resident tray service alongside the UI.
+    app.setQuitOnLastWindowClosed(False)
 
     vault_path = Path(args.vault).expanduser() if args.vault else load_saved_vault_path()
     vault = Vault(vault_path)
@@ -1230,8 +1244,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     window = PasswordManagerWindow(vault, background_start=args.background)
-    app.setQuitOnLastWindowClosed(not window.tray_available)
-
     if window.background_start and window.tray_available:
         window.statusBar().showMessage(
             "バックグラウンドで起動しました。通知領域のアイコンから操作できます。"
